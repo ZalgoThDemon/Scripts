@@ -2,7 +2,167 @@ local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+
+-- Estados principales (empieza apagado)
+local scriptEnabled = false
+
+-- Interfaz gráfica principal
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ControlScriptMenu"
+screenGui.ResetOnSpawn = false
+
+pcall(function()
+    screenGui.Parent = CoreGui
+end)
+if not screenGui.Parent then
+    screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- Ventana flotante del menú
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 160, 0, 90)
+mainFrame.Position = UDim2.new(0, 50, 0, 50)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mainFrame.BorderColor3 = Color3.fromRGB(60, 60, 60)
+mainFrame.BorderSizePixel = 1
+mainFrame.Parent = screenGui
+
+-- Título de la ventana
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -30, 0, 25)
+titleLabel.Position = UDim2.new(0, 10, 0, 5)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Panel Control"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 12
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = mainFrame
+
+-- Botón de cerrar (destruye el menú por completo sin dejar logos)
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 20, 0, 20)
+closeButton.Position = UDim2.new(1, -25, 0, 7)
+closeButton.BackgroundTransparency = 1
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(150, 150, 150)
+closeButton.TextSize = 12
+closeButton.Font = Enum.Font.GothamBold
+closeButton.Parent = mainFrame
+
+-- Botón interno para activar/desactivar el ESP (refleja el estado inicial apagado)
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(1, -20, 0, 35)
+toggleButton.Position = UDim2.new(0, 10, 0, 38)
+toggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleButton.BorderColor3 = Color3.fromRGB(255, 50, 50)
+toggleButton.BorderSizePixel = 2
+toggleButton.Text = "ESP: OFF"
+toggleButton.TextColor3 = Color3.fromRGB(255, 50, 50)
+toggleButton.TextSize = 13
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.Parent = mainFrame
+
+-- Sistema para arrastrar la ventana desde cualquier parte del panel
+local dragging, dragInput, dragStart, startPos
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+mainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Funciones para limpiar por completo todos los ESPs (Jugadores, Entidades y Objetos)
+local function removeESP(model)
+    if not model then return end
+    local hl = model:FindFirstChild("SafeESP_HL")
+    if hl then hl:Destroy() end
+    local head = model:FindFirstChild("Head") or model.PrimaryPart
+    if head then
+        local bb = head:FindFirstChild("SafeESP_BB")
+        if bb then bb:Destroy() end
+    end
+end
+
+local function removeItemESP(obj)
+    if not obj then return end
+    local hl = obj:FindFirstChild("ItemESP_HL")
+    if hl then hl:Destroy() end
+    local part = nil
+    if obj:IsA("Model") then
+        part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+    elseif obj:IsA("BasePart") then
+        part = obj
+    end
+    if part then
+        local bb = part:FindFirstChild("ItemESP_BB")
+        if bb then bb:Destroy() end
+    end
+end
+
+local function clearAllVisuals()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character then
+            removeESP(player.Character)
+        end
+    end
+
+    for model, _ in pairs(trackedEntities or {}) do
+        if model then
+            removeESP(model)
+        end
+    end
+
+    for obj, _ in pairs(trackedItems or {}) do
+        if obj then
+            removeItemESP(obj)
+        end
+    end
+end
+
+-- Control de eventos de la interfaz
+toggleButton.MouseButton1Click:Connect(function()
+    scriptEnabled = not scriptEnabled
+    if scriptEnabled then
+        toggleButton.Text = "ESP: ON"
+        toggleButton.TextColor3 = Color3.fromRGB(0, 255, 120)
+        toggleButton.BorderColor3 = Color3.fromRGB(0, 255, 120)
+    else
+        toggleButton.Text = "ESP: OFF"
+        toggleButton.TextColor3 = Color3.fromRGB(255, 50, 50)
+        toggleButton.BorderColor3 = Color3.fromRGB(255, 50, 50)
+        clearAllVisuals()
+    end
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
 
 -- 1. SISTEMA FULLBRIGHT DIRECTO
 pcall(function()
@@ -21,6 +181,7 @@ end)
 
 -- 2. FUNCIÓN DE ESP PARA JUGADORES Y ENTIDADES
 local function updateESP(model, isPlayer, isLockedInCell, health, maxHealth)
+    if not scriptEnabled then return end
     if not model or not model:IsA("Model") then return end
     
     local color = isPlayer and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(255, 30, 30)
@@ -88,6 +249,7 @@ end
 
 -- 3. FUNCIÓN DE ESP PARA OBJETOS
 local function updateItemESP(obj, labelText, color)
+    if not scriptEnabled then return end
     if not obj then return end
     
     local highlight = obj:FindFirstChild("ItemESP_HL")
@@ -139,36 +301,9 @@ local function updateItemESP(obj, labelText, color)
     end
 end
 
-local function removeESP(model)
-    if not model then return end
-    local hl = model:FindFirstChild("SafeESP_HL")
-    if hl then hl:Destroy() end
-    local head = model:FindFirstChild("Head") or model.PrimaryPart
-    if head then
-        local bb = head:FindFirstChild("SafeESP_BB")
-        if bb then bb:Destroy() end
-    end
-end
-
-local function removeItemESP(obj)
-    if not obj then return end
-    local hl = obj:FindFirstChild("ItemESP_HL")
-    if hl then hl:Destroy() end
-    local part = nil
-    if obj:IsA("Model") then
-        part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-    elseif obj:IsA("BasePart") then
-        part = obj
-    end
-    if part then
-        local bb = part:FindFirstChild("ItemESP_BB")
-        if bb then bb:Destroy() end
-    end
-end
-
 -- 4. REGISTRO CACHEADO Y FILTRADO EXACTO
-local trackedEntities = {}
-local trackedItems = {}
+trackedEntities = {}
+trackedItems = {}
 
 local function registerEntity(model)
     if not model:IsA("Model") then return end
@@ -219,6 +354,8 @@ end)
 
 -- 5. BUCLE PRINCIPAL CON DETECCIÓN REAL DE FALLOS
 RunService.Heartbeat:Connect(function()
+    if not scriptEnabled then return end
+
     Lighting.Brightness = 2
     Lighting.GlobalShadows = false
 
