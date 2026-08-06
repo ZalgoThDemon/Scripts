@@ -1,59 +1,306 @@
-local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
 
--- 1. Iluminación base estilo Shaders RTX
-Lighting.Brightness = 1.8
-Lighting.ClockTime = 23.5 -- Hora nocturna para forzar la oscuridad ambiental y el contraste con las lámparas
-Lighting.GeographicLatitude = 0
-Lighting.ExposureCompensation = -0.1
-Lighting.GlobalShadows = true
-Lighting.ShadowSoftness = 0.1 -- Sombras más marcadas y definidas
+-- 1. SISTEMA FULLBRIGHT DIRECTO
+pcall(function()
+    Lighting.Brightness = 2
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    for _, e in ipairs(Lighting:GetChildren()) do
+        if e:IsA("Atmosphere") or e:IsA("PostEffect") then
+            e.Enabled = false
+        end
+    end
+end)
 
--- Oscurecer el ambiente exterior para que resalten los puntos de luz cálidos
-Lighting.OutdoorAmbient = Color3.fromRGB(35, 30, 45)
-Lighting.Ambient = Color3.fromRGB(20, 18, 25)
-Lighting.ColorShift_Top = Color3.fromRGB(255, 220, 180)
-Lighting.ColorShift_Bottom = Color3.fromRGB(15, 15, 20)
+-- 2. FUNCIÓN DE ESP PARA JUGADORES Y ENTIDADES
+local function updateESP(model, isPlayer, isLockedInCell, health, maxHealth)
+    if not model or not model:IsA("Model") then return end
+    
+    local color = isPlayer and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(255, 30, 30)
+    local textColor = isPlayer and Color3.fromRGB(150, 220, 255) or Color3.fromRGB(255, 100, 100)
 
--- 2. Limpiar cualquier desenfoque o blur basura
-for _, effect in ipairs(Lighting:GetChildren()) do
-    if effect:IsA("DepthOfFieldEffect") or effect:IsA("BlurEffect") then
-        effect:Destroy()
+    local highlight = model:FindFirstChild("SafeESP_HL")
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.Name = "SafeESP_HL"
+        highlight.Adornee = model
+        highlight.FillTransparency = 1
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = model
+    end
+    highlight.OutlineColor = color
+
+    local head = model:FindFirstChild("Head") or model.PrimaryPart
+    if head then
+        local billboard = head:FindFirstChild("SafeESP_BB")
+        if not billboard then
+            billboard = Instance.new("BillboardGui")
+            billboard.Name = "SafeESP_BB"
+            billboard.Adornee = head
+            billboard.Size = UDim2.new(0, 120, 0, 20)
+            billboard.StudsOffset = Vector3.new(0, 2.0, 0)
+            billboard.AlwaysOnTop = true
+            billboard.Parent = head
+
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Name = "Text"
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.TextStrokeTransparency = 0
+            textLabel.TextSize = 8
+            textLabel.Font = Enum.Font.GothamBold
+            textLabel.Parent = billboard
+        end
+        
+        local textLabel = billboard:FindFirstChild("Text")
+        if textLabel then
+            local displayName = model.Name
+            if displayName == "" or displayName == "Model" then
+                displayName = isPlayer and "Jugador" or "Entidad Hostil"
+            end
+
+            if isPlayer then
+                if health and maxHealth then
+                    textLabel.Text = displayName .. " | " .. math.floor(health) .. "/" .. math.floor(maxHealth)
+                else
+                    textLabel.Text = displayName .. " | 100/100"
+                end
+            else
+                if isLockedInCell then
+                    textLabel.Text = displayName .. " (Encerrado)"
+                else
+                    textLabel.Text = displayName
+                end
+            end
+            
+            textLabel.TextColor3 = textColor
+        end
     end
 end
 
--- 3. Configurar efectos de post-procesamiento nítidos
-local function applyShaders()
-    -- ColorCorrection para lograr ese contraste oscuro y tonos cinematográficos
-    local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
-    if not cc then
-        cc = Instance.new("ColorCorrectionEffect")
-        cc.Parent = Lighting
+-- 3. FUNCIÓN DE ESP PARA OBJETOS
+local function updateItemESP(obj, labelText, color)
+    if not obj then return end
+    
+    local highlight = obj:FindFirstChild("ItemESP_HL")
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.Name = "ItemESP_HL"
+        highlight.Adornee = obj
+        highlight.FillTransparency = 0.4
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = obj
     end
-    cc.Brightness = -0.05
-    cc.Contrast = 0.35 -- Alto contraste para las zonas oscuras y de luz
-    cc.Saturation = 0.15
-    cc.TintColor = Color3.fromRGB(255, 240, 220)
+    highlight.FillColor = color
+    highlight.OutlineColor = color
 
-    -- Bloom controlado para el brillo de las lámparas sin difuminar la pantalla
-    local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
-    if not bloom then
-        bloom = Instance.new("BloomEffect")
-        bloom.Parent = Lighting
+    local targetPart = nil
+    if obj:IsA("Model") then
+        targetPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+    elseif obj:IsA("BasePart") then
+        targetPart = obj
     end
-    bloom.Intensity = 0.5
-    bloom.Size = 16
-    bloom.Threshold = 0.8
+
+    if targetPart then
+        local billboard = targetPart:FindFirstChild("ItemESP_BB")
+        if not billboard then
+            billboard = Instance.new("BillboardGui")
+            billboard.Name = "ItemESP_BB"
+            billboard.Adornee = targetPart
+            billboard.Size = UDim2.new(0, 120, 0, 20)
+            billboard.StudsOffset = Vector3.new(0, 1.2, 0)
+            billboard.AlwaysOnTop = true
+            billboard.Parent = targetPart
+
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Name = "Text"
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.TextStrokeTransparency = 0
+            textLabel.TextSize = 8
+            textLabel.Font = Enum.Font.GothamBold
+            textLabel.Parent = billboard
+        end
+        
+        local textLabel = billboard:FindFirstChild("Text")
+        if textLabel then
+            textLabel.Text = labelText
+            textLabel.TextColor3 = color
+        end
+    end
 end
 
-applyShaders()
+local function removeESP(model)
+    if not model then return end
+    local hl = model:FindFirstChild("SafeESP_HL")
+    if hl then hl:Destroy() end
+    local head = model:FindFirstChild("Head") or model.PrimaryPart
+    if head then
+        local bb = head:FindFirstChild("SafeESP_BB")
+        if bb then bb:Destroy() end
+    end
+end
 
--- 4. Mantener la consistencia bloqueando efectos molestos
+local function removeItemESP(obj)
+    if not obj then return end
+    local hl = obj:FindFirstChild("ItemESP_HL")
+    if hl then hl:Destroy() end
+    local part = nil
+    if obj:IsA("Model") then
+        part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+    elseif obj:IsA("BasePart") then
+        part = obj
+    end
+    if part then
+        local bb = part:FindFirstChild("ItemESP_BB")
+        if bb then bb:Destroy() end
+    end
+end
+
+-- 4. REGISTRO CACHEADO Y FILTRADO EXACTO
+local trackedEntities = {}
+local trackedItems = {}
+
+local function registerEntity(model)
+    if not model:IsA("Model") then return end
+    if Players:GetPlayerFromCharacter(model) then return end
+    
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    local rootPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+    
+    if humanoid and rootPart and not trackedEntities[model] then
+        trackedEntities[model] = {Humanoid = humanoid, RootPart = rootPart}
+    end
+end
+
+local function checkAndRegisterItem(obj)
+    if obj:IsA("Model") or obj:IsA("BasePart") then
+        local nameLower = obj.Name:lower()
+        if nameLower:find("venda") or nameLower:find("bandage") or 
+           nameLower:find("dinero") or nameLower:find("money") or nameLower:find("cash") or 
+           nameLower:find("coin") or nameLower:find("billete") or nameLower:find("gold") or 
+           nameLower:find("mission") or nameLower:find("mision") or nameLower:find("quest") or 
+           nameLower:find("objetivo") or nameLower:find("task") or nameLower:find("drop") or 
+           nameLower:find("loot") or nameLower:find("fuse") or nameLower:find("panel") or
+           nameLower:find("activeitem") then
+            trackedItems[obj] = true
+        end
+    end
+end
+
+for _, obj in ipairs(Workspace:GetDescendants()) do
+    registerEntity(obj)
+    checkAndRegisterItem(obj)
+end
+
+Workspace.DescendantAdded:Connect(function(obj)
+    task.spawn(function()
+        task.wait(0.2)
+        registerEntity(obj)
+        checkAndRegisterItem(obj)
+    end)
+end)
+
+Workspace.DescendantRemoving:Connect(function(obj)
+    if trackedItems[obj] then
+        removeItemESP(obj)
+        trackedItems[obj] = nil
+    end
+end)
+
+-- 5. BUCLE PRINCIPAL CON DETECCIÓN REAL DE FALLOS
 RunService.Heartbeat:Connect(function()
-    Lighting.GlobalShadows = true
-    for _, effect in ipairs(Lighting:GetChildren()) do
-        if effect:IsA("DepthOfFieldEffect") or effect:IsA("BlurEffect") then
-            effect:Destroy()
+    Lighting.Brightness = 2
+    Lighting.GlobalShadows = false
+
+    -- A. Actualizar jugadores
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                updateESP(player.Character, true, false, humanoid.Health, humanoid.MaxHealth)
+            else
+                updateESP(player.Character, true, false, 100, 100)
+            end
+        end
+    end
+
+    -- B. Actualizar entidades hostiles
+    for model, data in pairs(trackedEntities) do
+        if not model.Parent or not data.Humanoid or data.Humanoid.Health <= 0 then
+            removeESP(model)
+            trackedEntities[model] = nil
+        else
+            local pos = data.RootPart.Position
+            local enCeldaX = (pos.X >= 241.0 and pos.X <= 280.0)
+            
+            local celda1 = (enCeldaX and pos.Z >= -123.0 and pos.Z <= -100.0)
+            local celda2 = (enCeldaX and pos.Z >= -65.2  and pos.Z <= -42.2)
+            local celda3 = (enCeldaX and pos.Z >= 72.9   and pos.Z <= 95.9)
+            local celda4 = (enCeldaX and pos.Z >= 114.4  and pos.Z <= 137.4)
+            
+            local enCeldaZ = celda1 or celda2 or celda3 or celda4
+            
+            updateESP(model, false, (enCeldaX and enCeldaZ))
+        end
+    end
+
+    -- C. Actualizar Objetos y Misiones
+    for obj, _ in pairs(trackedItems) do
+        if not obj.Parent then
+            removeItemESP(obj)
+            trackedItems[obj] = nil
+        else
+            local nameLower = obj.Name:lower()
+            local shouldMark = false
+            local color = Color3.fromRGB(255, 255, 0)
+            local labelText = ""
+
+            if nameLower:find("venda") or nameLower:find("bandage") then
+                color = Color3.fromRGB(0, 255, 120)
+                labelText = "[Venda]"
+                shouldMark = true
+            elseif nameLower:find("dinero") or nameLower:find("money") or nameLower:find("cash") or nameLower:find("coin") or nameLower:find("billete") or nameLower:find("gold") then
+                color = Color3.fromRGB(0, 255, 0)
+                labelText = "[Dinero]"
+                shouldMark = true
+            elseif nameLower:find("mission") or nameLower:find("mision") or nameLower:find("quest") or nameLower:find("objetivo") or nameLower:find("task") then
+                color = Color3.fromRGB(255, 0, 255)
+                labelText = "[Misión]"
+                shouldMark = true
+            elseif nameLower:find("activeitem") or nameLower:find("fuse") or nameLower:find("panel") then
+                local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true) or (obj:IsA("ProximityPrompt") and obj)
+                local hasSpark = false
+                for _, d in ipairs(obj:GetDescendants()) do
+                    if (d:IsA("ParticleEmitter") or d:IsA("Fire") or d:IsA("Smoke")) and d.Enabled then
+                        hasSpark = true
+                        break
+                    end
+                end
+
+                if (prompt and prompt.Enabled) or hasSpark then
+                    color = Color3.fromRGB(255, 140, 0)
+                    labelText = "[Arreglar]"
+                    shouldMark = true
+                else
+                    shouldMark = false
+                end
+            end
+
+            if shouldMark then
+                updateItemESP(obj, labelText, color)
+            else
+                removeItemESP(obj)
+            end
         end
     end
 end)
