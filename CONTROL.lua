@@ -1,149 +1,59 @@
-local Workspace = game:GetService("Workspace")
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
-local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
 
--- 1. SISTEMA FULLBRIGHT DIRECTO
-pcall(function()
-    Lighting.Brightness = 2
-    Lighting.ClockTime = 14
-    Lighting.FogEnd = 100000
-    Lighting.GlobalShadows = false
-    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-    for _, e in ipairs(Lighting:GetChildren()) do
-        if e:IsA("Atmosphere") or e:IsA("PostEffect") then
-            e.Enabled = false
-        end
-    end
-end)
+-- 1. Iluminación base estilo Shaders RTX
+Lighting.Brightness = 1.8
+Lighting.ClockTime = 23.5 -- Hora nocturna para forzar la oscuridad ambiental y el contraste con las lámparas
+Lighting.GeographicLatitude = 0
+Lighting.ExposureCompensation = -0.1
+Lighting.GlobalShadows = true
+Lighting.ShadowSoftness = 0.1 -- Sombras más marcadas y definidas
 
--- 2. FUNCIÓN DE ESP CON ESTADO DE CELDAS
-local function updateESP(model, isPlayer, isLockedInCell)
-    if not model or not model:IsA("Model") then return end
-    
-    local color = isPlayer and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(255, 30, 30)
-    local textColor = isPlayer and Color3.fromRGB(150, 220, 255) or Color3.fromRGB(255, 100, 100)
+-- Oscurecer el ambiente exterior para que resalten los puntos de luz cálidos
+Lighting.OutdoorAmbient = Color3.fromRGB(35, 30, 45)
+Lighting.Ambient = Color3.fromRGB(20, 18, 25)
+Lighting.ColorShift_Top = Color3.fromRGB(255, 220, 180)
+Lighting.ColorShift_Bottom = Color3.fromRGB(15, 15, 20)
 
-    local highlight = model:FindFirstChild("SafeESP_HL")
-    if not highlight then
-        highlight = Instance.new("Highlight")
-        highlight.Name = "SafeESP_HL"
-        highlight.Adornee = model
-        highlight.FillTransparency = 1
-        highlight.OutlineTransparency = 0
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        highlight.Parent = model
-    end
-    highlight.OutlineColor = color
-
-    local head = model:FindFirstChild("Head") or model.PrimaryPart
-    if head then
-        local billboard = head:FindFirstChild("SafeESP_BB")
-        if not billboard then
-            billboard = Instance.new("BillboardGui")
-            billboard.Name = "SafeESP_BB"
-            billboard.Adornee = head
-            billboard.Size = UDim2.new(0, 200, 0, 40)
-            billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-            billboard.AlwaysOnTop = true
-            billboard.Parent = head
-
-            local textLabel = Instance.new("TextLabel")
-            textLabel.Name = "Text"
-            textLabel.Size = UDim2.new(1, 0, 1, 0)
-            textLabel.BackgroundTransparency = 1
-            textLabel.TextStrokeTransparency = 0
-            textLabel.TextSize = 14
-            textLabel.Font = Enum.Font.GothamBold
-            textLabel.Parent = billboard
-        end
-        
-        local textLabel = billboard:FindFirstChild("Text")
-        if textLabel then
-            local displayName = model.Name
-            if displayName == "" or displayName == "Model" then
-                displayName = isPlayer and "Jugador" or "Entidad Hostil"
-            end
-
-            if not isPlayer and isLockedInCell then
-                textLabel.Text = displayName .. " (Encerrado)"
-            else
-                textLabel.Text = displayName
-            end
-            
-            textLabel.TextColor3 = textColor
-        end
+-- 2. Limpiar cualquier desenfoque o blur basura
+for _, effect in ipairs(Lighting:GetChildren()) do
+    if effect:IsA("DepthOfFieldEffect") or effect:IsA("BlurEffect") then
+        effect:Destroy()
     end
 end
 
-local function removeESP(model)
-    if not model then return end
-    local hl = model:FindFirstChild("SafeESP_HL")
-    if hl then hl:Destroy() end
-    local head = model:FindFirstChild("Head") or model.PrimaryPart
-    if head then
-        local bb = head:FindFirstChild("SafeESP_BB")
-        if bb then bb:Destroy() end
+-- 3. Configurar efectos de post-procesamiento nítidos
+local function applyShaders()
+    -- ColorCorrection para lograr ese contraste oscuro y tonos cinematográficos
+    local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+    if not cc then
+        cc = Instance.new("ColorCorrectionEffect")
+        cc.Parent = Lighting
     end
-end
+    cc.Brightness = -0.05
+    cc.Contrast = 0.35 -- Alto contraste para las zonas oscuras y de luz
+    cc.Saturation = 0.15
+    cc.TintColor = Color3.fromRGB(255, 240, 220)
 
--- 3. REGISTRO CACHEADO DE ENTIDADES (Evita lag de búsqueda masiva)
-local trackedEntities = {}
-
-local function registerEntity(model)
-    if not model:IsA("Model") then return end
-    if Players:GetPlayerFromCharacter(model) then return end
-    
-    local humanoid = model:FindFirstChildOfClass("Humanoid")
-    local rootPart = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
-    
-    if humanoid and rootPart and not trackedEntities[model] then
-        trackedEntities[model] = {Humanoid = humanoid, RootPart = rootPart}
+    -- Bloom controlado para el brillo de las lámparas sin difuminar la pantalla
+    local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
+    if not bloom then
+        bloom = Instance.new("BloomEffect")
+        bloom.Parent = Lighting
     end
+    bloom.Intensity = 0.5
+    bloom.Size = 16
+    bloom.Threshold = 0.8
 end
 
--- Escanear mapa una única vez al iniciar
-for _, obj in ipairs(Workspace:GetDescendants()) do
-    registerEntity(obj)
-end
+applyShaders()
 
--- Escuchar entidades nuevas que aparezcan
-Workspace.DescendantAdded:Connect(function(obj)
-    task.spawn(function()
-        task.wait(0.2)
-        registerEntity(obj)
-    end)
-end)
-
--- 4. BUCLE PRINCIPAL ULTRAOPTIMIZADO
+-- 4. Mantener la consistencia bloqueando efectos molestos
 RunService.Heartbeat:Connect(function()
-    -- A. Actualizar jugadores
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            updateESP(player.Character, true, false)
-        end
-    end
-
-    -- B. Iterar únicamente sobre la lista cacheada de entidades guardadas
-    for model, data in pairs(trackedEntities) do
-        if not model.Parent or not data.Humanoid or data.Humanoid.Health <= 0 then
-            removeESP(model)
-            trackedEntities[model] = nil
-        else
-            local pos = data.RootPart.Position
-            
-            local enCeldaX = (pos.X >= 241.0 and pos.X <= 280.0)
-            
-            local celda1 = (enCeldaX and pos.Z >= -123.0 and pos.Z <= -100.0)
-            local celda2 = (enCeldaX and pos.Z >= -65.2  and pos.Z <= -42.2)
-            local celda3 = (enCeldaX and pos.Z >= 72.9   and pos.Z <= 95.9)
-            local celda4 = (enCeldaX and pos.Z >= 114.4  and pos.Z <= 137.4)
-            
-            local enCeldaZ = celda1 or celda2 or celda3 or celda4
-            
-            updateESP(model, false, (enCeldaX and enCeldaZ))
+    Lighting.GlobalShadows = true
+    for _, effect in ipairs(Lighting:GetChildren()) do
+        if effect:IsA("DepthOfFieldEffect") or effect:IsA("BlurEffect") then
+            effect:Destroy()
         end
     end
 end)
