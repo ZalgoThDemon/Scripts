@@ -43,7 +43,7 @@ titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Parent = mainFrame
 
--- Botón de cerrar (solo oculta la interfaz, el RTX y sus estados siguen intactos)
+-- Botón de cerrar (solo oculta la interfaz)
 local closeButton = Instance.new("TextButton")
 closeButton.Size = UDim2.new(0, 20, 0, 20)
 closeButton.Position = UDim2.new(1, -25, 0, 7)
@@ -110,7 +110,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Guardar iluminación original para cuando el usuario decida apagarlo manualmente desde el botón
+-- Guardar iluminación original
 local originalLighting = {
     Brightness = Lighting.Brightness,
     ClockTime = Lighting.ClockTime,
@@ -142,7 +142,7 @@ local function resetLighting()
     if bloom then bloom:Destroy() end
 end
 
--- Eventos de los botones (el apagado real solo ocurre aquí)
+-- Eventos de los botones
 rtxExtButton.MouseButton1Click:Connect(function()
     rtxExteriorEnabled = not rtxExteriorEnabled
     if rtxExteriorEnabled then
@@ -181,12 +181,11 @@ rtxIntButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Al cerrar con la "X", la interfaz se destruye pero los estados y los efectos se mantienen intactos
 closeButton.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- Bucle principal constante
+-- Bucle principal con iluminación interior mucho más brillante y dorada
 RunService.Heartbeat:Connect(function()
     if rtxExteriorEnabled then
         Lighting.Brightness = 1.8
@@ -227,17 +226,18 @@ RunService.Heartbeat:Connect(function()
         bloom.Threshold = 0.8
 
     elseif rtxInteriorEnabled then
-        Lighting.Brightness = 1.3
+        -- VALORES AUMENTADOS: Mayor brillo general y rebotes cálidos más fuertes para eliminar zonas negras
+        Lighting.Brightness = 2.4
         Lighting.ClockTime = 2.0
         Lighting.GeographicLatitude = 45
-        Lighting.ExposureCompensation = 0.1
+        Lighting.ExposureCompensation = 0.35
         Lighting.GlobalShadows = true
-        Lighting.ShadowSoftness = 0.25
+        Lighting.ShadowSoftness = 0.55 -- Sombras mucho más difusas para que la luz de las lámparas penetre bien
 
-        Lighting.OutdoorAmbient = Color3.fromRGB(15, 15, 20)
-        Lighting.Ambient = Color3.fromRGB(35, 28, 22)
-        Lighting.ColorShift_Top = Color3.fromRGB(255, 180, 120)
-        Lighting.ColorShift_Bottom = Color3.fromRGB(40, 30, 25)
+        Lighting.OutdoorAmbient = Color3.fromRGB(45, 40, 35)
+        Lighting.Ambient = Color3.fromRGB(90, 75, 60)         -- Iluminación base muy levantada para que no haya oscuridad absoluta
+        Lighting.ColorShift_Top = Color3.fromRGB(255, 210, 150)   -- Luz cálida de lámparas muy potente
+        Lighting.ColorShift_Bottom = Color3.fromRGB(80, 65, 50) -- Rebote fuerte en el suelo de madera
 
         for _, effect in ipairs(Lighting:GetChildren()) do
             if effect:IsA("DepthOfFieldEffect") or effect:IsA("BlurEffect") then
@@ -250,18 +250,18 @@ RunService.Heartbeat:Connect(function()
             cc = Instance.new("ColorCorrectionEffect")
             cc.Parent = Lighting
         end
-        cc.Brightness = -0.02
-        cc.Contrast = 0.28
-        cc.Saturation = 0.2
-        cc.TintColor = Color3.fromRGB(255, 235, 210)
+        cc.Brightness = 0.05  -- Aclara sutilmente la escena
+        cc.Contrast = 0.18    -- Baja un poco el contraste para que los pasillos oscuros se abran
+        cc.Saturation = 0.25  -- Sube la viveza de la madera
+        cc.TintColor = Color3.fromRGB(255, 240, 220)
 
         local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
         if not bloom then
             bloom = Instance.new("BloomEffect")
             bloom.Parent = Lighting
         end
-        bloom.Intensity = 0.6
-        bloom.Size = 20
-        bloom.Threshold = 0.75
+        bloom.Intensity = 0.8  -- Destello más vivo en las pantallas de las lámparas
+        bloom.Size = 24
+        bloom.Threshold = 0.65
     end
 end)
