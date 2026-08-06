@@ -43,7 +43,7 @@ titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Parent = mainFrame
 
--- Botón de cerrar (destruye el menú y restaura la iluminación)
+-- Botón de cerrar (solo oculta la interfaz, el RTX y sus estados siguen intactos)
 local closeButton = Instance.new("TextButton")
 closeButton.Size = UDim2.new(0, 20, 0, 20)
 closeButton.Position = UDim2.new(1, -25, 0, 7)
@@ -110,7 +110,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Guardar iluminación original
+-- Guardar iluminación original para cuando el usuario decida apagarlo manualmente desde el botón
 local originalLighting = {
     Brightness = Lighting.Brightness,
     ClockTime = Lighting.ClockTime,
@@ -142,11 +142,11 @@ local function resetLighting()
     if bloom then bloom:Destroy() end
 end
 
--- Eventos de los botones
+-- Eventos de los botones (el apagado real solo ocurre aquí)
 rtxExtButton.MouseButton1Click:Connect(function()
     rtxExteriorEnabled = not rtxExteriorEnabled
     if rtxExteriorEnabled then
-        rtxInteriorEnabled = false -- Apaga el otro modo para que no compitan
+        rtxInteriorEnabled = false
         rtxIntButton.Text = "RTX Interior: OFF"
         rtxIntButton.TextColor3 = Color3.fromRGB(255, 50, 50)
         rtxIntButton.BorderColor3 = Color3.fromRGB(255, 50, 50)
@@ -165,7 +165,7 @@ end)
 rtxIntButton.MouseButton1Click:Connect(function()
     rtxInteriorEnabled = not rtxInteriorEnabled
     if rtxInteriorEnabled then
-        rtxExteriorEnabled = false -- Apaga el otro modo para que no compitan
+        rtxExteriorEnabled = false
         rtxExtButton.Text = "RTX Exterior: OFF"
         rtxExtButton.TextColor3 = Color3.fromRGB(255, 50, 50)
         rtxExtButton.BorderColor3 = Color3.fromRGB(255, 50, 50)
@@ -181,17 +181,14 @@ rtxIntButton.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Al cerrar con la "X", la interfaz se destruye pero los estados y los efectos se mantienen intactos
 closeButton.MouseButton1Click:Connect(function()
-    rtxExteriorEnabled = false
-    rtxInteriorEnabled = false
-    resetLighting()
     screenGui:Destroy()
 end)
 
--- Bucle principal
+-- Bucle principal constante
 RunService.Heartbeat:Connect(function()
     if rtxExteriorEnabled then
-        -- Configuración RTX Exterior (Shaders)
         Lighting.Brightness = 1.8
         Lighting.ClockTime = 23.5
         Lighting.GeographicLatitude = 0
@@ -230,7 +227,6 @@ RunService.Heartbeat:Connect(function()
         bloom.Threshold = 0.8
 
     elseif rtxInteriorEnabled then
-        -- Configuración RTX Interior
         Lighting.Brightness = 1.3
         Lighting.ClockTime = 2.0
         Lighting.GeographicLatitude = 45
